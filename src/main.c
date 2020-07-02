@@ -57,17 +57,6 @@
 // TWI instance.
 static const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
 
-/* Common addresses definition for temperature sensor. */
-#define LM75B_ADDR          (0x90U >> 1)
-
-#define LM75B_REG_TEMP      0x00U
-#define LM75B_REG_CONF      0x01U
-#define LM75B_REG_THYST     0x02U
-#define LM75B_REG_TOS       0x03U
-
-/* Mode for LM75B. */
-#define NORMAL_MODE 0U
-
 /**
  * @brief Function for main application entry.
  */
@@ -83,11 +72,12 @@ int main(void)
     i2c.scl_pin = ARDUINO_SCL_PIN;
     i2c.sda_pin = ARDUINO_SDA_PIN;
     if (rv8803_twi_init(&i2c) != 0) {
-        NRF_LOG_ERROR("\r\nRV8803: TWI initialisation fail!");
+        NRF_LOG_ERROR("\r\nMAIN: TWI initialisation fail!");
     }
     else {
-        NRF_LOG_INFO("\r\nRV8803: TWI driver initialised!");
+        NRF_LOG_INFO("\r\nTWI driver initialised!");
     }
+    rv8803_read_ID();
     NRF_LOG_FLUSH();
 
     // Configure board.
@@ -110,9 +100,9 @@ int main(void)
         {
             bsp_board_led_invert(i);
             nrf_delay_ms(500);
-            NRF_LOG_INFO("LED toggled!\n\r");
+            // NRF_LOG_INFO("LED toggled!\n\r");
         }
-        NRF_LOG_FLUSH();
+        // NRF_LOG_FLUSH();
     }
 }
 
