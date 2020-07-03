@@ -2,6 +2,13 @@
 This repository contains code for the board nRF52840-DK. It corresponds to a firmware code which blinks with four LEDs and connects to an
 external RTC device. The project uses a LOGGER that through information about the state of the process on a virtual COM port.
 
+System setup:
+    Download SDK for board nRF52840-DK
+    Install gcc-toolchain version 'gcc-arm-none-eabi-6-2017-q2-update'
+    Install program 'nrfjprog'
+    Install JLink
+    Clone this repository and change the variable $(SDK_ROOT) within Makefile with the path to the SDK for board nRF52840-DK
+
 In order to compile the system:
 
     make all
