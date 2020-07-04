@@ -77,7 +77,7 @@ int main(void)
     else {
         NRF_LOG_INFO("\r\nTWI driver initialised!");
     }
-    rv8803_read_ID();
+    rv8803_read_ID(&i2c);
     NRF_LOG_FLUSH();
 
     // Configure board.

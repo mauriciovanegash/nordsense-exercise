@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 // CHIP slave address
-#define CHIP_ADDR       (0x52)
+#define CHIP_ADDR       (0x32)
 
 // Internal registers
 #define UNIX_TIME_0     (0x1b)
@@ -35,10 +35,10 @@ typedef struct _twi_peipheral
     uint32_t sda_pin;
 }twi_peripheral_t;
 
-int rv8803_twi_init(twi_peripheral_t *twi_instance);
-int rv8803_read_ID(void);
-int rv8803_set_unix_time(uint32_t unix_time);
-int rv8803_get_unix_time(uint32_t *unix_time);
+int rv8803_twi_init(twi_peripheral_t *ptrToTWI);
+int rv8803_read_ID(twi_peripheral_t *ptrToTWI);
+int rv8803_set_unix_time(twi_peripheral_t *ptrToTWI, uint32_t unix_time);
+int rv8803_get_unix_time(twi_peripheral_t *ptrToTWI, uint32_t *unix_time);
 
 #ifdef __cplusplus
 }

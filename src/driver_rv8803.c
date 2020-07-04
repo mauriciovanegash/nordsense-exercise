@@ -3,8 +3,7 @@
 // Indicates if operation on TWI has ended.
 static volatile bool m_tx_done = false;
 static volatile bool m_rx_done = false;
-// Pointer to TWI instance
-twi_peripheral_t *ptrToTWI = NULL;
+
 // 64 bytes are enough to read all internal registers in one TWI transfer
 #define BUFFER_LENGTH   66
 // Internal buffer for TWI transaction
@@ -54,12 +53,13 @@ static int twi_init(nrf_drv_twi_t *twi_instance, uint32_t scl_pin, uint32_t sda_
 /**
  * @brief TWI_read
  * This function reads through the TWI interface.
+ * @param twi_instance: Instance of the TWI peripheral
  * @param addr[in]:     Internal register address
  * @param data[out]:    Pointer to buffer
  * @param length:   Number of bytes to be transferred
  * @return      0 on success.
  */
-static int TWI_read(uint8_t addr, uint8_t *data, uint8_t length)
+static int TWI_read(nrf_drv_twi_t *twi_instance, uint8_t addr, uint8_t *data, uint8_t length)
 {
     if (length > BUFFER_LENGTH-2) {
         NRF_LOG_ERROR("DRIVER-RV8803: Requested transfer length higher than %d at %s:%d.", BUFFER_LENGTH-2, __FILE__, __LINE__);
@@ -70,7 +70,7 @@ static int TWI_read(uint8_t addr, uint8_t *data, uint8_t length)
     // Request read
     twi_buffer[0] = addr;
     m_tx_done = false;
-    ret_code_t err_code = nrf_drv_twi_tx(ptrToTWI->twi_instance, CHIP_ADDR, twi_buffer, 1, false);
+    ret_code_t err_code = nrf_drv_twi_tx(twi_instance, CHIP_ADDR, twi_buffer, 1, false);
     APP_ERROR_CHECK(err_code);
     if (err_code != 0) {
         m_tx_done = true;
@@ -86,7 +86,7 @@ static int TWI_read(uint8_t addr, uint8_t *data, uint8_t length)
     // Actual read
     timeout = 1000000;
     m_rx_done = false;
-    err_code = nrf_drv_twi_rx(ptrToTWI->twi_instance, CHIP_ADDR, twi_buffer, length);
+    err_code = nrf_drv_twi_rx(twi_instance, CHIP_ADDR, twi_buffer, length);
     APP_ERROR_CHECK(err_code);
     if (err_code != 0) {
         m_rx_done = true;
@@ -105,12 +105,13 @@ static int TWI_read(uint8_t addr, uint8_t *data, uint8_t length)
 /**
  * @brief TWI_write
  * This function writes through the TWI interface.
+ * @param twi_instance: Instance of the TWI peripheral
  * @param addr[in]:     Internal register address
  * @param data[in]:     Pointer to buffer
  * @param length:       Number of bytes to be transferred
  * @return      0 on success.
  */
-static int TWI_write(uint8_t addr, uint8_t *data, uint8_t length)
+static int TWI_write(nrf_drv_twi_t *twi_instance, uint8_t addr, uint8_t *data, uint8_t length)
 {
     if (length > BUFFER_LENGTH-2) {
         NRF_LOG_ERROR("DRIVER-RV8803: Requested transfer length higher than %d at %s:%d.", BUFFER_LENGTH-2, __FILE__, __LINE__);
@@ -122,7 +123,7 @@ static int TWI_write(uint8_t addr, uint8_t *data, uint8_t length)
     twi_buffer[0] = addr;
     memcpy(&twi_buffer[1], data, length);
     m_tx_done = false;
-    ret_code_t err_code = nrf_drv_twi_tx(ptrToTWI->twi_instance, CHIP_ADDR, twi_buffer, length+1, false);
+    ret_code_t err_code = nrf_drv_twi_tx(twi_instance, CHIP_ADDR, twi_buffer, length+1, false);
     APP_ERROR_CHECK(err_code);
     if (err_code != 0) {
         m_tx_done = true;
@@ -140,11 +141,13 @@ static int TWI_write(uint8_t addr, uint8_t *data, uint8_t length)
 
 /**
  * @brief Function to read chip-ID - a test function.
+ * @param ptrToTWI: Pointer to peripheral information
+ * @return      0 on success
  */
-int rv8803_read_ID(void)
+int rv8803_read_ID(twi_peripheral_t *ptrToTWI)
 {
     uint8_t reg = 0;
-    int ret = TWI_read(CHIP_ID, &reg, 1);
+    int ret = TWI_read(ptrToTWI->twi_instance, CHIP_ID, &reg, 1);
     NRF_LOG_INFO("DRIVER-RV8803: CHIP-ID - %d", reg);
     return ret;
 }
@@ -152,33 +155,35 @@ int rv8803_read_ID(void)
 /**
  * @brief Set UNIX time.
  * This function set UNIX time on external micro crystal
+ * @param ptrToTWI: Pointer to peripheral information
  * @param unix_time:    UNIX epoch
  * @returns     0 on success.
  */
-int rv8803_set_unix_time(uint32_t unix_time)
+int rv8803_set_unix_time(twi_peripheral_t *ptrToTWI, uint32_t unix_time)
 {
     uint8_t reg[4];
     reg[0] = (uint8_t)((unix_time >> 0) & 0xff);
     reg[1] = (uint8_t)((unix_time >> 8) & 0xff);
     reg[2] = (uint8_t)((unix_time >> 16) & 0xff);
     reg[3] = (uint8_t)((unix_time >> 24) & 0xff);
-    return TWI_write(UNIX_TIME_0, reg, 4);
+    return TWI_write(ptrToTWI->twi_instance, UNIX_TIME_0, reg, 4);
 }
 
 /**
  * @brief Set UNIX time.
  * This function set UNIX time on external micro crystal
+ * @param ptrToTWI: Pointer to peripheral information
  * @param unix_time:    UNIX epoch
  * @returns     0 on success.
  */
-int rv8803_get_unix_time(uint32_t *unix_time)
+int rv8803_get_unix_time(twi_peripheral_t *ptrToTWI, uint32_t *unix_time)
 {
     uint8_t reg[4];
     reg[0] = 0;
     reg[1] = 0;
     reg[2] = 0;
     reg[3] = 0;
-    int ret = TWI_read(CHIP_ID, reg, 4);
+    int ret = TWI_read(ptrToTWI->twi_instance, UNIX_TIME_0, reg, 4);
     *unix_time = (uint32_t)((reg[3] >> 0) & 0xff) | ((reg[2] >> 8) & 0xff) | ((reg[1] >> 16) & 0xff) | ((reg[0] >> 24) & 0xff);
     return ret;
 }
@@ -191,9 +196,8 @@ int rv8803_get_unix_time(uint32_t *unix_time)
  *              information to configure peripheral
  * @return      O on success
  */
-int rv8803_twi_init(twi_peripheral_t *twi_instance)
+int rv8803_twi_init(twi_peripheral_t *ptrToTWI)
 {
-    ptrToTWI = twi_instance;
     return twi_init(ptrToTWI->twi_instance, ptrToTWI->scl_pin, ptrToTWI->sda_pin);
 }
 
