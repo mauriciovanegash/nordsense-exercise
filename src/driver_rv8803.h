@@ -1,6 +1,7 @@
 #ifndef DRIVER_RV8803_H
 #define DRIVER_RV8803_H
 
+#include <time.h>
 #include "app_util_platform.h"
 #include "app_error.h"
 #include "nrf_drv_twi.h"
@@ -18,15 +19,25 @@ extern "C" {
 #define CHIP_ADDR       (0x32)
 
 // Internal registers
-#define UNIX_TIME_0     (0x1b)
-#define UNIX_TIME_1     (0x1c)
-#define UNIX_TIME_2     (0x1d)
-#define UNIX_TIME_3     (0x1e)
-#define CHIP_ID         (0x28)
+#define TIME_MIN        (0x01)
+#define TIME_SEC        (0x00)
+#define TIME_HOUR       (0x02)
+#define TIME_WEEKDAY    (0x03)
+#define TIME_DATE       (0x04)
+#define TIME_MONTH      (0x05)
+#define TIME_YEAR       (0x06)
 
 // Error definition
 #define RV8803_TWI_TIMEOUT          -1
 #define RV8803_UNEXPECTED_LENGTH    -2
+
+// Macros
+#define BCD2DEC(value)              (((value) >> 4) & 0xf)*10 + ((value) & 0xf)
+#define DEC2BCD(value)              (((((value) - (value)%10)/10) << 4) + ((value)%10 & 0xf))
+#define SHIFTONEHOT(value, pos)     (((value) >> pos) & 0x1)
+#define ONEHOT2DEC(value)           ((SHIFTONEHOT((value), 0))*1 + (SHIFTONEHOT((value), 1))*2 + (SHIFTONEHOT((value), 2))*3 + \
+                                     (SHIFTONEHOT((value), 3))*4 + (SHIFTONEHOT((value), 5))*6 + (SHIFTONEHOT((value), 6))*7 - 1)
+#define DEC2ONEHOT(value)           (0x1 << (value))
 
 typedef struct _twi_peipheral
 {
@@ -36,9 +47,9 @@ typedef struct _twi_peipheral
 }twi_peripheral_t;
 
 int rv8803_twi_init(twi_peripheral_t *ptrToTWI);
-int rv8803_read_ID(twi_peripheral_t *ptrToTWI);
-int rv8803_set_unix_time(twi_peripheral_t *ptrToTWI, uint32_t unix_time);
-int rv8803_get_unix_time(twi_peripheral_t *ptrToTWI, uint32_t *unix_time);
+int rv8803_test_time(twi_peripheral_t *ptrToTWI);
+int rv8803_set_unix_time(twi_peripheral_t *ptrToTWI, int32_t unix_time);
+int rv8803_get_unix_time(twi_peripheral_t *ptrToTWI, int32_t *unix_time);
 
 #ifdef __cplusplus
 }

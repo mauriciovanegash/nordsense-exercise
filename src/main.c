@@ -49,6 +49,7 @@
 
 #include <stdio.h>
 #include "boards.h"
+#include "nrf_drv_gpiote.h"
 #include "driver_rv8803.h"
 
 // TWI instance ID.
@@ -56,6 +57,40 @@
 
 // TWI instance.
 static const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
+static volatile bool m_gpio_rise = false;
+
+/**
+ * @brief GPIO events handler.
+ */
+void gpio_interrupt_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+{
+    m_gpio_rise = true;
+}
+
+/**
+ * @brief GPIO configuration
+ * This function configures a GPIO as input and enables
+ * the interrupt.
+ * @return 0 on success
+ */
+int gpio_init(nrfx_gpiote_pin_t pin)
+{
+    ret_code_t err_code = nrf_drv_gpiote_init();
+    APP_ERROR_CHECK(err_code);
+    if (err_code != 0)
+        return err_code;
+
+    nrf_drv_gpiote_in_config_t in_config = GPIOTE_CONFIG_IN_SENSE_TOGGLE(true);
+    in_config.pull = NRF_GPIO_PIN_PULLUP;
+
+    err_code = nrf_drv_gpiote_in_init(pin, &in_config, gpio_interrupt_handler);
+    APP_ERROR_CHECK(err_code);
+    if (err_code != 0)
+        return err_code;
+
+    nrf_drv_gpiote_in_event_enable(pin, true);
+    return 0;
+}
 
 /**
  * @brief Function for main application entry.
@@ -66,7 +101,6 @@ int main(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 
     NRF_LOG_INFO("\r\nTWI sensor example started.");
-    NRF_LOG_FLUSH();
     twi_peripheral_t i2c;
     i2c.twi_instance = (nrf_drv_twi_t *)&m_twi;
     i2c.scl_pin = ARDUINO_SCL_PIN;
@@ -77,7 +111,6 @@ int main(void)
     else {
         NRF_LOG_INFO("\r\nTWI driver initialised!");
     }
-    rv8803_read_ID(&i2c);
     NRF_LOG_FLUSH();
 
     // Configure board.
@@ -85,24 +118,44 @@ int main(void)
     NRF_LOG_INFO("\r\nLEDs initialised.");
     NRF_LOG_FLUSH();
 
+    // Test unix-time writing
+    int32_t unix_time = 1593985469;
+    if (rv8803_set_unix_time(&i2c, unix_time) != 0)
+    {
+        NRF_LOG_ERROR("\r\nMAIN: RV8803 test set unix-time fail!");
+        NRF_LOG_FLUSH();
+    }
+
+    // Test unix-time readings
+    unix_time = 0;
+    if (rv8803_get_unix_time(&i2c, &unix_time) == 0)
+    {
+        NRF_LOG_INFO("\r\nMAIN: RV8803 get unix-time\r\n %s", ctime((time_t *)&unix_time));
+    }
+    else
+    {
+        NRF_LOG_ERROR("\r\nMAIN: RV8803 test get unix-time fail!");
+    }
+    NRF_LOG_FLUSH();
+
     while (true)
     {
-        nrf_delay_ms(500);
-
         // do
         // {
         //     __WFE();
         // }while (m_xfer_done == false);
 
-        // read_sensor_data();
-
         for (int i = 0; i < LEDS_NUMBER; i++)
         {
             bsp_board_led_invert(i);
             nrf_delay_ms(500);
-            // NRF_LOG_INFO("LED toggled!\n\r");
         }
-        // NRF_LOG_FLUSH();
+        // Test time evolution
+        if (rv8803_test_time(&i2c) != 0)
+        {
+            NRF_LOG_ERROR("\r\nMAIN: RV8803 test time-evolution fail!");
+        }
+        NRF_LOG_FLUSH();
     }
 }
 

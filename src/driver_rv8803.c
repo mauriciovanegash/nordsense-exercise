@@ -53,10 +53,10 @@ static int twi_init(nrf_drv_twi_t *twi_instance, uint32_t scl_pin, uint32_t sda_
 /**
  * @brief TWI_read
  * This function reads through the TWI interface.
- * @param twi_instance: Instance of the TWI peripheral
- * @param addr[in]:     Internal register address
- * @param data[out]:    Pointer to buffer
- * @param length:   Number of bytes to be transferred
+ * @param twi_instance[in]: Instance of the TWI peripheral
+ * @param addr:             Internal register address
+ * @param data[out]:        Pointer to buffer
+ * @param length:           Number of bytes to be transferred
  * @return      0 on success.
  */
 static int TWI_read(nrf_drv_twi_t *twi_instance, uint8_t addr, uint8_t *data, uint8_t length)
@@ -86,7 +86,7 @@ static int TWI_read(nrf_drv_twi_t *twi_instance, uint8_t addr, uint8_t *data, ui
     // Actual read
     timeout = 1000000;
     m_rx_done = false;
-    err_code = nrf_drv_twi_rx(twi_instance, CHIP_ADDR, twi_buffer, length);
+    err_code = nrf_drv_twi_rx(twi_instance, CHIP_ADDR, data, length+1);
     APP_ERROR_CHECK(err_code);
     if (err_code != 0) {
         m_rx_done = true;
@@ -105,10 +105,10 @@ static int TWI_read(nrf_drv_twi_t *twi_instance, uint8_t addr, uint8_t *data, ui
 /**
  * @brief TWI_write
  * This function writes through the TWI interface.
- * @param twi_instance: Instance of the TWI peripheral
- * @param addr[in]:     Internal register address
- * @param data[in]:     Pointer to buffer
- * @param length:       Number of bytes to be transferred
+ * @param twi_instance[in]: Instance of the TWI peripheral
+ * @param addr:             Internal register address
+ * @param data[in]:         Pointer to buffer
+ * @param length:           Number of bytes to be transferred
  * @return      0 on success.
  */
 static int TWI_write(nrf_drv_twi_t *twi_instance, uint8_t addr, uint8_t *data, uint8_t length)
@@ -140,51 +140,68 @@ static int TWI_write(nrf_drv_twi_t *twi_instance, uint8_t addr, uint8_t *data, u
 }
 
 /**
- * @brief Function to read chip-ID - a test function.
+ * @brief Function to read min and seconds - a test function.
  * @param ptrToTWI: Pointer to peripheral information
  * @return      0 on success
  */
-int rv8803_read_ID(twi_peripheral_t *ptrToTWI)
+int rv8803_test_time(twi_peripheral_t *ptrToTWI)
 {
-    uint8_t reg = 0;
-    int ret = TWI_read(ptrToTWI->twi_instance, CHIP_ID, &reg, 1);
-    NRF_LOG_INFO("DRIVER-RV8803: CHIP-ID - %d", reg);
+    uint8_t reg[3];
+    int ret = TWI_read(ptrToTWI->twi_instance, TIME_SEC, reg, 3);
+    NRF_LOG_INFO("DRIVER-RV8803: hour:min:sec - %02x:%02x:%02x", reg[2], reg[1], reg[0]);
+    NRF_LOG_FLUSH();
     return ret;
 }
 
 /**
  * @brief Set UNIX time.
  * This function set UNIX time on external micro crystal
- * @param ptrToTWI: Pointer to peripheral information
+ * @param ptrToTWI[in]: Pointer to peripheral information
  * @param unix_time:    UNIX epoch
  * @returns     0 on success.
  */
-int rv8803_set_unix_time(twi_peripheral_t *ptrToTWI, uint32_t unix_time)
+int rv8803_set_unix_time(twi_peripheral_t *ptrToTWI, int32_t unix_time)
 {
-    uint8_t reg[4];
-    reg[0] = (uint8_t)((unix_time >> 0) & 0xff);
-    reg[1] = (uint8_t)((unix_time >> 8) & 0xff);
-    reg[2] = (uint8_t)((unix_time >> 16) & 0xff);
-    reg[3] = (uint8_t)((unix_time >> 24) & 0xff);
-    return TWI_write(ptrToTWI->twi_instance, UNIX_TIME_0, reg, 4);
+    uint8_t reg[8];
+    time_t utime = unix_time;
+    struct tm *timeinfo = gmtime(&utime);
+    // Convert "tm" structure into register values
+    reg[0] = DEC2BCD(timeinfo->tm_sec);
+    reg[1] = DEC2BCD(timeinfo->tm_min);
+    reg[2] = DEC2BCD(timeinfo->tm_hour);
+    reg[3] = DEC2ONEHOT(timeinfo->tm_wday);
+    reg[4] = DEC2BCD(timeinfo->tm_mday);
+    reg[5] = DEC2BCD(timeinfo->tm_mon);
+    // Function gmtime returns years starting from 1900.
+    // The chip stores years from 00 to 99 - it start counting from 2000
+    // The actual acount for the years is "tm_year + 1900 - 2000"
+    reg[6] = DEC2BCD(timeinfo->tm_year - 100);
+    return TWI_write(ptrToTWI->twi_instance, TIME_SEC, reg, 8);
 }
 
 /**
  * @brief Set UNIX time.
  * This function set UNIX time on external micro crystal
- * @param ptrToTWI: Pointer to peripheral information
- * @param unix_time:    UNIX epoch
+ * @param ptrToTWI[in]:     Pointer to peripheral information
+ * @param unix_time[out]:   UNIX epoch
  * @returns     0 on success.
  */
-int rv8803_get_unix_time(twi_peripheral_t *ptrToTWI, uint32_t *unix_time)
+int rv8803_get_unix_time(twi_peripheral_t *ptrToTWI, int32_t *unix_time)
 {
-    uint8_t reg[4];
-    reg[0] = 0;
-    reg[1] = 0;
-    reg[2] = 0;
-    reg[3] = 0;
-    int ret = TWI_read(ptrToTWI->twi_instance, UNIX_TIME_0, reg, 4);
-    *unix_time = (uint32_t)((reg[3] >> 0) & 0xff) | ((reg[2] >> 8) & 0xff) | ((reg[1] >> 16) & 0xff) | ((reg[0] >> 24) & 0xff);
+    uint8_t reg[8];
+    memset(reg, 0, 8);
+    int ret = TWI_read(ptrToTWI->twi_instance, TIME_SEC, reg, 8);
+    struct tm timeinfo;
+    // Convert register values into "tm" structure
+    timeinfo.tm_sec = BCD2DEC(reg[0]);
+    timeinfo.tm_min = BCD2DEC(reg[1]);
+    timeinfo.tm_hour = BCD2DEC(reg[2]);
+    timeinfo.tm_wday = ONEHOT2DEC(reg[3]);
+    timeinfo.tm_mday = BCD2DEC(reg[4]);
+    timeinfo.tm_mon = BCD2DEC(reg[5]);
+    timeinfo.tm_year = BCD2DEC(reg[6]) + 100;
+    timeinfo.tm_isdst = 0;
+    *unix_time = (int32_t)mktime(&timeinfo);
     return ret;
 }
 
@@ -192,23 +209,11 @@ int rv8803_get_unix_time(twi_peripheral_t *ptrToTWI, uint32_t *unix_time)
  * @brief TWI driver initialisation
  * This function configures peripheral TWI and takes a copy of the pointer
  * to TWI instance.
- * @param[in]   pointer to structure containing the necessary
- *              information to configure peripheral
+ * @param ptrToTWI[in]:     pointer to structure containing the necessary
+ *                          information to configure peripheral
  * @return      O on success
  */
 int rv8803_twi_init(twi_peripheral_t *ptrToTWI)
 {
     return twi_init(ptrToTWI->twi_instance, ptrToTWI->scl_pin, ptrToTWI->sda_pin);
 }
-
-/**
- * @brief Function for reading data from temperature sensor.
- */
-// static void read_sensor_data()
-// {
-//     m_xfer_done = false;
-
-//     /* Read 1 byte from the specified address - skip 3 bits dedicated for fractional part of temperature. */
-//     ret_code_t err_code = nrf_drv_twi_rx(ptrToTWI->twi_instance, CHIP_ADDR, &m_sample, sizeof(m_sample));
-//     APP_ERROR_CHECK(err_code);
-// }
