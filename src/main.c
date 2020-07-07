@@ -70,10 +70,11 @@ void gpio_interrupt_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t acti
 /**
  * @brief GPIO configuration
  * This function configures a GPIO as input and enables
- * the interrupt.
+ * it as interruptable.
+ * @param pin:      Pin number
  * @return 0 on success
  */
-int gpio_init(nrfx_gpiote_pin_t pin)
+static int gpio_interrupt_init(nrfx_gpiote_pin_t pin)
 {
     ret_code_t err_code = nrf_drv_gpiote_init();
     APP_ERROR_CHECK(err_code);
@@ -138,24 +139,60 @@ int main(void)
     }
     NRF_LOG_FLUSH();
 
+    // Enable GPIO interrupt behaviour
+    // It is necessary to detect the alarm generated from "driver_rv8803"
+    if (gpio_interrupt_init(ARDUINO_13_PIN) != 0)
+    {
+        NRF_LOG_ERROR("\r\nMAIN: GPIO interrupt initialisation fail!");
+        NRF_LOG_FLUSH();
+    }
+
+    // Set alarm for 21:45
+    if ((rv8803_set_alarm(&i2c, MIN, 45) != 0) || (rv8803_set_alarm(&i2c, HOUR, 21) != 0))
+    {
+        NRF_LOG_ERROR("\r\nMAIN: Alarm set fail!");
+    }
+    else
+    {
+        NRF_LOG_INFO("\r\nMAIN: RV8803 setting alarm for hh:mm - 21:45\r\n Current time %s", ctime((time_t *)&unix_time));
+    }
+    NRF_LOG_FLUSH();
+
     while (true)
     {
-        // do
-        // {
-        //     __WFE();
-        // }while (m_xfer_done == false);
-
         for (int i = 0; i < LEDS_NUMBER; i++)
         {
             bsp_board_led_invert(i);
             nrf_delay_ms(500);
         }
-        // Test time evolution
-        if (rv8803_test_time(&i2c) != 0)
-        {
-            NRF_LOG_ERROR("\r\nMAIN: RV8803 test time-evolution fail!");
-        }
+
+        NRF_LOG_INFO("\r\nMAIN: Waiting for the alarm...");
         NRF_LOG_FLUSH();
+        do
+        {
+            // Test time evolution
+            if (rv8803_test_time(&i2c) != 0)
+            {
+                NRF_LOG_ERROR("\r\nMAIN: RV8803 test time-evolution fail!");
+            }
+            NRF_LOG_FLUSH();
+            nrf_delay_ms(1000);
+        }while (m_gpio_rise == false);
+        m_gpio_rise = false;
+
+        NRF_LOG_INFO("\r\nMAIN: Alarm generated, program done!");
+        NRF_LOG_FLUSH();
+        for (int i = 0; i < LEDS_NUMBER; i++)
+        {
+            bsp_board_led_invert(i);
+            nrf_delay_ms(500);
+        }
+
+        do
+        {
+            __WFE();
+        }while (m_gpio_rise == false);
+        m_gpio_rise = false;
     }
 }
 

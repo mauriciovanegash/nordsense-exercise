@@ -19,13 +19,19 @@ extern "C" {
 #define CHIP_ADDR       (0x32)
 
 // Internal registers
-#define TIME_MIN        (0x01)
-#define TIME_SEC        (0x00)
-#define TIME_HOUR       (0x02)
-#define TIME_WEEKDAY    (0x03)
-#define TIME_DATE       (0x04)
-#define TIME_MONTH      (0x05)
-#define TIME_YEAR       (0x06)
+#define TIME_MIN            (0x01)
+#define TIME_SEC            (0x00)
+#define TIME_HOUR           (0x02)
+#define TIME_WEEKDAY        (0x03)
+#define TIME_DATE           (0x04)
+#define TIME_MONTH          (0x05)
+#define TIME_YEAR           (0x06)
+#define ALARM_MINUTES       (0x08)
+#define ALARM_HOURS         (0x09)
+#define ALARM_WDAYS         (0x0a)
+#define ALARM_DATE          (0x0b)
+#define FLAG_REGISTER       (0x0e)
+#define CONTROL_REGISTER    (0x0f)
 
 // Error definition
 #define RV8803_TWI_TIMEOUT          -1
@@ -39,6 +45,8 @@ extern "C" {
                                      (SHIFTONEHOT((value), 3))*4 + (SHIFTONEHOT((value), 5))*6 + (SHIFTONEHOT((value), 6))*7 - 1)
 #define DEC2ONEHOT(value)           (0x1 << (value))
 
+enum ALARM_TYPE {MIN=1, HOUR, WDAY, DATE};
+
 typedef struct _twi_peipheral
 {
     nrf_drv_twi_t *twi_instance;
@@ -50,6 +58,10 @@ int rv8803_twi_init(twi_peripheral_t *ptrToTWI);
 int rv8803_test_time(twi_peripheral_t *ptrToTWI);
 int rv8803_set_unix_time(twi_peripheral_t *ptrToTWI, int32_t unix_time);
 int rv8803_get_unix_time(twi_peripheral_t *ptrToTWI, int32_t *unix_time);
+int rv8803_set_alarm(twi_peripheral_t *ptrToTWI, enum ALARM_TYPE alarm, uint8_t value);
+int rv8803_unset_alarm(twi_peripheral_t *ptrToTWI, enum ALARM_TYPE alarm, uint8_t value);
+int rv8803_get_alarm(twi_peripheral_t *ptrToTWI, enum ALARM_TYPE alarm, uint8_t *value);
+int rv8803_get_interrupt_status(twi_peripheral_t *ptrToTWI, uint8_t *value);
 
 #ifdef __cplusplus
 }
